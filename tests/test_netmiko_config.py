@@ -55,22 +55,21 @@ def test_exit_config_mode(net_connect, commands, expected_responses):
     net_connect.exit_config_mode()
     assert net_connect.check_config_mode() == False
 
-
 def test_command_set(net_connect, commands, expected_responses):
-    '''
-    Test sending configuration commands
-    '''
-
+    """Test sending configuration commands."""
     config_commands = commands['config']
     support_commit = commands.get('support_commit')
     config_verify = commands['config_verification']
 
-    net_connect.send_config_set(config_commands[0:1])
+    # Set to initial value and testing sending command as a string
+    net_connect.send_config_set(config_commands[0])
     if support_commit:
         net_connect.commit()
 
     cmd_response = expected_responses.get('cmd_response_init')
     config_commands_output = net_connect.send_command(config_verify)
+    print(config_verify)
+    print(config_commands_output)
     if cmd_response:
         assert cmd_response in config_commands_output
     else:
@@ -81,7 +80,7 @@ def test_command_set(net_connect, commands, expected_responses):
         net_connect.commit()
 
     cmd_response = expected_responses.get('cmd_response_final')
-    config_commands_output = net_connect.send_command(config_verify)
+    config_commands_output = net_connect.send_command_expect(config_verify)
     if cmd_response:
         assert cmd_response in config_commands_output
     else:
@@ -96,7 +95,7 @@ def test_commands_from_file(net_connect, commands, expected_responses):
     config_verify = commands['config_verification']
     if config_file is not None:
         net_connect.send_config_from_file(config_file)
-        config_commands_output = net_connect.send_command(config_verify)
+        config_commands_output = net_connect.send_command_expect(config_verify)
         assert expected_responses["file_check_cmd"] in config_commands_output
     else:
         print("Skipping test (no file specified)...",)

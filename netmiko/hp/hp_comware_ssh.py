@@ -1,57 +1,50 @@
 from __future__ import print_function
 from __future__ import unicode_literals
 import time
-from netmiko.ssh_connection import SSHConnection
-from netmiko.netmiko_globals import MAX_BUFFER
+from netmiko.cisco_base_connection import CiscoSSHConnection
 
 
-class HPComwareSSH(SSHConnection):
+class HPComwareSSH(CiscoSSHConnection):
 
     def session_preparation(self):
-        '''
-        Prepare the session after the connection has been established
-        '''
+        """
+        Prepare the session after the connection has been established.
+        Extra time to read HP banners.
+        """
+        delay_factor = self.select_delay_factor(delay_factor=0)
+        i = 1
+        while i <= 4:
+            # Comware can have a banner that prompts you to continue
+            # 'Press Y or ENTER to continue, N to exit.'
+            time.sleep(.5 * delay_factor)
+            self.write_channel("\n")
+            i += 1
 
-        self.disable_paging(command="\nscreen-length disable\n")
+        time.sleep(.3 * delay_factor)
+        self.clear_buffer()
+        self._test_channel_read(pattern=r'[>\]]')
         self.set_base_prompt()
-
+        command = self.RETURN + "screen-length disable"
+        self.disable_paging(command=command)
+        # Clear the read buffer
+        time.sleep(.3 * self.global_delay_factor)
+        self.clear_buffer()
 
     def config_mode(self, config_command='system-view'):
-        '''
-        First check whether currently already in configuration mode.
-
-        Enter config mode (if necessary)
-        '''
-
-        # Call parent class with different command for entering config mode
+        """Enter configuration mode."""
         return super(HPComwareSSH, self).config_mode(config_command=config_command)
 
-
     def exit_config_mode(self, exit_config='return'):
-        '''
-        First check whether in configuration mode.
-
-        If so, exit config mode
-        '''
-
-        # Call parent class with different command for exiting config mode
+        """Exit config mode."""
         return super(HPComwareSSH, self).exit_config_mode(exit_config=exit_config)
 
-
     def check_config_mode(self, check_string=']'):
-        '''
-        Checks if the device is in configuration mode or not
-
-        Returns a boolean
-        '''
-
-        # Call parent class with different command for exiting config mode
+        """Check whether device is in configuration mode. Return a boolean."""
         return super(HPComwareSSH, self).check_config_mode(check_string=check_string)
 
-
     def set_base_prompt(self, pri_prompt_terminator='>', alt_prompt_terminator=']',
-                        delay_factor=.5):
-        '''
+                        delay_factor=1):
+        """
         Sets self.base_prompt
 
         Used as delimiter for stripping of trailing prompt in output.
@@ -60,35 +53,30 @@ class HPComwareSSH(SSHConnection):
         this will be the router prompt with < > or [ ] stripped off.
 
         This will be set on logging in, but not when entering system-view
-        '''
+        """
+        prompt = super(HPComwareSSH, self).set_base_prompt(
+            pri_prompt_terminator=pri_prompt_terminator,
+            alt_prompt_terminator=alt_prompt_terminator,
+            delay_factor=delay_factor)
 
-        debug = False
-
-        if debug:
-            print("In set_base_prompt")
-
-        self.clear_buffer()
-        self.remote_conn.sendall("\n")
-        time.sleep(1*delay_factor)
-
-        prompt = self.remote_conn.recv(MAX_BUFFER)
-        prompt = self.normalize_linefeeds(prompt)
-
-        # If multiple lines in the output take the last line
-        prompt = prompt.split('\n')[-1]
+        # Strip off leading character
+        prompt = prompt[1:]
         prompt = prompt.strip()
-
-        # Check that ends with a valid terminator character
-        if not prompt[-1] in (pri_prompt_terminator, alt_prompt_terminator):
-            raise ValueError("Router prompt not found: {0}".format(prompt))
-
-        # Strip off leading and trailing terminator
-        prompt = prompt[1:-1]
-        prompt = prompt.strip()
-
         self.base_prompt = prompt
-
-        if debug:
-            print("prompt: {}".format(self.base_prompt))
-
         return self.base_prompt
+
+    def enable(self, cmd='system-view'):
+        """enable mode on Comware is system-view."""
+        return self.config_mode(config_command=cmd)
+
+    def exit_enable_mode(self, exit_command='return'):
+        """enable mode on Comware is system-view."""
+        return self.exit_config_mode(exit_config=exit_command)
+
+    def check_enable_mode(self, check_string=']'):
+        """enable mode on Comware is system-view."""
+        return self.check_config_mode(check_string=check_string)
+
+    def save_config(self, cmd='save force', confirm=False):
+        """Save Config."""
+        return super(HPComwareSSH, self).save_config(cmd=cmd, confirm=confirm)
